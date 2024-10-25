@@ -75,6 +75,7 @@ const userSchema = new Schema(
       type: String,
       default: "Default about the user",
       maxLength: 500,
+      minLength: 5,
     },
     skills: {
       type: Array,
