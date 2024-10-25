@@ -2,9 +2,15 @@ const express = require("express");
 const connectDB = require("../config/database");
 const User = require("./models/user");
 const app = express();
+const validateSignUpData = require("../utils/validation.js");
+const bcrypt = require("bcrypt");
+const cookieParser = require("cookie-parser");
+const jwt = require("jsonwebtoken");
+require("dotenv").config();
 
 //middlewares
 app.use(express.json());
+app.use(cookieParser());
 
 //Get user by email
 app.get("/user", async (req, res) => {
@@ -63,16 +69,67 @@ app.patch("/user", async (req, res) => {
 });
 
 app.post("/signup", async (req, res) => {
-  const { firstName, lastName, email, password } = req.body;
-
-  const user = new User(req.body);
-
   try {
+    validateSignUpData(req);
+
+    const salt = await bcrypt.genSalt(9);
+    console.log(salt);
+
+    const hashedPassword = await bcrypt.hash(req.body.password, 9);
+    console.log(hashedPassword);
+
+    const user = new User({ ...req.body, password: hashedPassword });
     await user.save();
+
     res.status(201).json("User created");
   } catch (error) {
     console.log(error);
-    res.status(500).json("Internal server error " + error.message);
+    res.status(500).json("ERROR: " + error.message);
+  }
+});
+
+//Login
+app.post("/login", async (req, res) => {
+  try {
+    const { email, password } = req.body;
+
+    const user = await User.findOne({ email });
+
+    if (!user) throw new Error("Invalid creadentials");
+
+    const isPasswordValid = await bcrypt.compare(password, user.password);
+
+    if (isPasswordValid) {
+      const token = await jwt.sign({ _id: user._id }, process.env.SECRET_KEY);
+
+      res.cookie("token", token);
+      res.status(200).json("User successfull loggedin");
+    } else {
+      throw new Error("Invalid creadentials");
+    }
+  } catch (error) {
+    console.log(error);
+    res.status(500).json("ERROR: " + error.message);
+  }
+});
+
+app.post("/profile", async (req, res) => {
+  const { token } = req.cookies;
+
+  try {
+    if (!validateToken) throw new Error("User if not signin");
+
+    const validateToken = await jwt.verify(token, process.env.SECRET_KEY);
+
+    console.log(validateToken);
+    const user = await User.findById(validateToken._id);
+
+    if (!user) throw new Error("User not found");
+
+    res.status(200).json(user);
+  } catch (error) {
+    console.log(error);
+    res.status(500).json("ERROR: " + error.message);
   }
 });
 
